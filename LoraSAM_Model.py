@@ -57,9 +57,7 @@ if __name__ == "__main__":
     lora_sam = LoraSam(sam_model, 4)
     lora_sam.sam = lora_sam.sam.to(device)
 
-    medical_dataset = MedicalDataset(is_train=0, transform=transforms.Compose([transforms.ToTensor()]))
-
-    train_dataloader, val_dataloader = get_dataloader()
+    train_dataloader, val_dataloader = get_dataloader(is_train=1, transform=transforms.Compose([transforms.ToTensor()]))
 
     lr = 1e-4
     wd = 0
@@ -68,11 +66,11 @@ if __name__ == "__main__":
     # loss_fn = torch.nn.MSELoss()
     loss_fn = torch.nn.BCELoss()
     num_epochs = lib.EPOCHS
-    losses = []
-
+    train_losses = []
+    val_losses = []
     lora_sam.sam.train()
     for epoch in tqdm(range(num_epochs)):
-        epoch_losses = []
+        epoch_Train_loss = []
         for idx, (input_image, gt_binary_mask, box_torch, original_image_size, input_size) in enumerate(
                 train_dataloader):
             # print(idx, (input_image, gt_binary_mask,box_torch))
@@ -111,17 +109,138 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            epoch_losses.append(loss.item())
-        losses.append(epoch_losses)
-        print(f'EPOCH: {epoch}')
-        print(f'Mean loss: {mean(epoch_losses)}')
+            epoch_Train_loss.append(loss.item())
+        train_losses.append(epoch_Train_loss)
+
+        with torch.no_grad():
+            lora_sam.sam.eval()
+            epoch_val_loss = []
+            for idx, (input_image, gt_binary_mask, box_torch, original_image_size, input_size) in enumerate(
+                    val_dataloader):
+                # print(idx, (input_image, gt_binary_mask,box_torch))
+                # print(input_image.shape, type(input_image))  # torch.Size([1, 3, 1024, 1024]) <class 'torch.Tensor'>
+
+                image_embedding = lora_sam.sam.image_encoder(input_image)
+
+                # print("image:",image_embedding.shape)
+
+                # 锚框
+                sparse_embeddings, dense_embeddings = lora_sam.sam.prompt_encoder(
+                    points=None,
+                    boxes=box_torch,
+                    masks=None,
+                )
+                # print("box:", sparse_embeddings, dense_embeddings)
+
+                # decoder
+                low_res_masks, iou_predictions = lora_sam.sam.mask_decoder(
+                    image_embeddings=image_embedding,
+                    image_pe=lora_sam.sam.prompt_encoder.get_dense_pe(),
+                    sparse_prompt_embeddings=sparse_embeddings,
+                    dense_prompt_embeddings=dense_embeddings,
+                    multimask_output=False,
+                )
+
+                upscaled_masks = lora_sam.sam.postprocess_masks(low_res_masks, input_size, original_image_size).to(
+                    device=device)
+
+                # print(low_res_masks, low_res_masks.shape)
+                # print(upscaled_masks, upscaled_masks.shape)
+
+                binary_mask = normalize(threshold(upscaled_masks, 0.0, 0))
+
+                loss = loss_fn(binary_mask, gt_binary_mask)
+
+                epoch_val_loss.append(loss.item())
+            val_losses.append(epoch_val_loss)
+
+        print(f'Epoch: {epoch}')
+        print(f'train Mean loss: {mean(epoch_Train_loss)}')
+        print(f'val Mean loss: {mean(epoch_val_loss)}')
 
     # 绘制损失曲线
-    mean_losses = [mean(x) for x in losses]
+    train_mean_losses = [mean(x) for x in train_losses]
+    val_mean_losses = [mean(x) for x in val_losses]
+    plt.plot(list(range(len(train_mean_losses))), train_mean_losses)
+    plt.plot(list(range(len(val_mean_losses))), val_mean_losses)
 
-    plt.plot(list(range(len(mean_losses))), mean_losses)
     plt.title('Mean epoch loss')
     plt.xlabel('Epoch Number')
     plt.ylabel('Loss')
-
+    plt.savefig("Image/loss.png")
     plt.show()
+
+    # compare our tuned model to the original model
+    # Load up the model with default weights
+    sam_model_orig = sam_model_registry[model_type](checkpoint=checkpoint)
+    sam_model_orig.to(device)
+
+    # Set up predictors for both tuned and original models
+    from segment_anything import sam_model_registry, SamPredictor
+
+    predictor_tuned = SamPredictor(lora_sam.sam)
+    predictor_original = SamPredictor(sam_model_orig)
+
+    ground_truth_dir = lib.ground_truth_dir
+    ground_truth_list = os.listdir(ground_truth_dir)
+
+    bbox_coords = {}  # {"image_name":[x, y, x + w, y + h]}
+    ground_truth_masks = {}  # {"image_name":[]}
+    k = len("_Segmentation.png")  # 无用后缀长度
+    for ground_truth in ground_truth_list:
+        f_path = os.path.join(ground_truth_dir, ground_truth)
+
+        gt_grayscale = cv2.imread(f_path, cv2.IMREAD_GRAYSCALE)  # RGB加权单通道灰度图读取
+
+        contours, hierarchy = cv2.findContours(gt_grayscale, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)  # 轮廓信息
+
+        if len(contours) == 1:  # 对遮罩图进行检测，仅有一个有效目标
+            x, y, w, h = cv2.boundingRect(contours[0])
+            bbox_coords[ground_truth[:- k]] = np.array([x, y, x + w, y + h])
+
+        ground_truth_masks[ground_truth[:- k]] = (gt_grayscale == 255)  # 转换成布尔矩阵
+
+        # break
+
+    # print(ground_truth_masks)
+    # print(bbox_coords)
+    keys = list(bbox_coords.keys())
+    image_dirPath = lib.test_image_dirPath
+    for k in keys:
+        image = cv2.imread(os.path.join(image_dirPath, "{0}.jpg".format(k)))
+
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        predictor_tuned.set_image(image)
+        predictor_original.set_image(image)
+
+        input_bbox = np.array(bbox_coords[k])
+
+        masks_tuned, _, _ = predictor_tuned.predict(
+            point_coords=None,
+            box=input_bbox,
+            multimask_output=False,
+        )
+
+        masks_orig, _, _ = predictor_original.predict(
+            point_coords=None,
+            box=input_bbox,
+            multimask_output=False,
+        )
+
+        _, axs = plt.subplots(1, 2, figsize=(25, 25))
+
+        axs[0].imshow(image)
+        show_mask(masks_tuned, axs[0])
+        show_box(input_bbox, axs[0])
+        axs[0].set_title('Mask with Tuned Model', fontsize=26)
+        axs[0].axis('off')
+
+        axs[1].imshow(image)
+        show_mask(masks_orig, axs[1])
+        show_box(input_bbox, axs[1])
+        axs[1].set_title('Mask with Untuned Model', fontsize=26)
+        axs[1].axis('off')
+
+        plt.show()
+
+    pass

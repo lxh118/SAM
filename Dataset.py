@@ -114,36 +114,40 @@ class MedicalDataset(Dataset):
         return len(self.total_name)
 
 
-def get_dataloader():
+def get_dataloader(is_train=1, transform=None):
     """
     实现数据集的加载
 
     :return: 训练集、验证集
     """
-    Medical_dataset = MedicalDataset(is_train=0)
-    total_size = len(Medical_dataset)
-    n = 0.8  # 划分比例
-    train_size = int(n * total_size)
-    val_size = total_size - train_size
+    if is_train:
+        Medical_dataset = MedicalDataset(is_train=is_train, transform=transform)
+        total_size = len(Medical_dataset)
+        n = 0.8  # 划分比例
+        train_size = int(n * total_size)
+        val_size = total_size - train_size
 
-    torch.manual_seed(666)  # 设置随机种子保证每次划分数据集相同
-    __train_dataset, __val_dataset = random_split(Medical_dataset, [train_size, val_size])
+        torch.manual_seed(666)  # 设置随机种子保证每次划分数据集相同
+        __train_dataset, __val_dataset = random_split(Medical_dataset, [train_size, val_size])
 
-    __train_dataloader = DataLoader(__train_dataset, batch_size=lib.BATCH_SIZE, shuffle=True,
-                                    num_workers=lib.NUM_WORKERS,
-                                    drop_last=True)
-    __val_dataloader = DataLoader(__val_dataset, batch_size=lib.BATCH_SIZE, shuffle=False,
-                                  num_workers=lib.NUM_WORKERS,
+        __train_dataloader = DataLoader(__train_dataset, batch_size=lib.BATCH_SIZE, shuffle=True,
+                                        num_workers=lib.NUM_WORKERS,
+                                        drop_last=True)
+        __val_dataloader = DataLoader(__val_dataset, batch_size=lib.BATCH_SIZE, shuffle=False,
+                                      num_workers=lib.NUM_WORKERS,
+                                      drop_last=True)
 
-                                  drop_last=True)
-
-    return __train_dataloader, __val_dataloader
+        return __train_dataloader, __val_dataloader
+    else:
+        Medical_dataset = MedicalDataset(is_train=is_train, transform=transform)
+        __test_dataloader = DataLoader(Medical_dataset, batch_size=lib.BATCH_SIZE, shuffle=False,
+                                       num_workers=lib.NUM_WORKERS,
+                                       drop_last=True)
+        return __test_dataloader
 
 
 if __name__ == "__main__":
-    medical_dataset = MedicalDataset(is_train=0, transform=transforms.Compose([transforms.ToTensor()]))
-
-    train_dataloader, val_dataloader = get_dataloader()
+    train_dataloader, val_dataloader = get_dataloader(is_train=0)
     for idx, (input_image, gt_binary_mask, box_torch, _, _) in enumerate(train_dataloader):
         # print(input_image.shape, gt_binary_mask.shape, type(input_image), type(gt_binary_mask))
         print(idx, (input_image, gt_binary_mask, box_torch))
