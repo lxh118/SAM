@@ -6,7 +6,8 @@ CV:SAM+YOLOv8+Medical Image Segmentation
 
 python版本：Python 3.9.18
 
-\n
+---
+
 ground_truth_dir : mask的文件路径
 
 image_dirPath : 原始图路径
@@ -16,7 +17,8 @@ ground_truth_dir = r"D:\MyFile\DataSet\ISBI2016_ISIC_Part1\ISBI2016_ISIC_Part1_T
 
 image_dirPath = r"D:\MyFile\DataSet\ISBI2016_ISIC_Part1\ISBI2016_ISIC_Part1_Training_Data"
 
-\n
+---
+
 bbox_coords ：锚框字典
 
 ground_truth_masks ：遮罩array
