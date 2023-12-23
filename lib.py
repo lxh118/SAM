@@ -19,4 +19,12 @@ DEVICE = 'cuda'
 ground_truth_dir = r"D:\MyFile\DataSet\ISBI2016_ISIC_Part1\ISBI2016_ISIC_Part1_Training_GroundTruth"
 image_dirPath = r"D:\MyFile\DataSet\ISBI2016_ISIC_Part1\ISBI2016_ISIC_Part1_Training_Data"
 
+test_ground_truth_dir = r"D:\MyFile\DataSet\ISBI2016_ISIC_Part1\ISBI2016_ISIC_Part1_Test_GroundTruth"
+test_image_dirPath = r"D:\MyFile\DataSet\ISBI2016_ISIC_Part1\ISBI2016_ISIC_Part1_Test_Data"
+
 EPOCHS = 20
+BATCH_SIZE = 1
+NUM_WORKERS = 0
+
+# import torch
+# torch.cuda.empty_cache()
