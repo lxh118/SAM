@@ -27,3 +27,7 @@ ground_truth_masks ：遮罩array
 bbox_coords = {}  # {'ISIC_0000000': array([ 51,  47, 899, 635]), }  # yolo计算的结果
 
 ground_truth_masks = {}  # {'ISIC_0000000':array([False,Ture]),}
+
+---
+
+# YOLO
