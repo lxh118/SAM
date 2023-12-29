@@ -45,3 +45,7 @@ yolov5代码使用：
 4. 测试
 
 `python detect.py --weights ./runs/train/exp/weights/last.pt --source ./datasets/CT/test --data ./data/CT_lung.yaml --imgsz 512 `
+
+# 数据集下载地址
+https://www.kaggle.com/datasets/kmader/finding-lungs-in-ct-data
+https://challenge.isic-archive.com/data/
