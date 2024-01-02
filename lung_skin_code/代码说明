@@ -1,1 +1,16 @@
 
+ckpt 保存训练记录
+model 保存模型
+Image 保存图片
+Test 为开发测试文件
+
+DataRename：做数据名称处理
+Dataset：做数据批次加载和数据预处理
+
+DrawImage：绘图
+lib：全局变量
+LoraSAM_Model:模型主函数
+MyLoss：计算损失
+
+SAM_LoRA_ImageEncoder:微调编码器，其余全量微调
+SAM_LoRA_ImageEncoder_MaskDecoder:lora微调编码器和解码器，其余全量微调
